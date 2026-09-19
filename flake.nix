@@ -22,6 +22,7 @@
       perSystem = {
         config,
         self',
+        pkgs,
         ...
       }: {
         pre-commit = {
@@ -35,12 +36,24 @@
           };
         };
 
+        rust-project.crates.audio-relay.crane.args = {
+          buildInputs = [
+            pkgs.rustPlatform.bindgenHook
+            pkgs.pipewire
+          ];
+          nativeBuildInputs = [pkgs.pkg-config];
+        };
+
         devShells.default = self'.devShells.rust.overrideAttrs (_: prevAttrs: {
           shellHook = ''
             ${prevAttrs.shellHook or ""}
             ${config.pre-commit.installationScript}
           '';
-          buildInputs = (prevAttrs.buildInputs or []) ++ [config.pre-commit.settings.package];
+          buildInputs =
+            (prevAttrs.buildInputs or [])
+            ++ [
+              config.pre-commit.settings.package
+            ];
         });
       };
     };
