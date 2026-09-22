@@ -19,11 +19,15 @@ impl<TDev: I2c> Driver<TDev> {
 
     pub fn init(&mut self) -> Result<()> {
         self.backlight.init()?;
+        self.set_backlight_rgb(0, 0, 0)?;
         Ok(())
     }
 
     pub fn set_backlight_rgb(&mut self, r: u8, g: u8, b: u8) -> Result<()> {
-        self.backlight.set_rgb(r, g, b)
+        self.backlight.set_reg(pca9633::Reg::Pwm2, r)?;
+        self.backlight.set_reg(pca9633::Reg::Pwm1, g)?;
+        self.backlight.set_reg(pca9633::Reg::Pwm0, b)?;
+        Ok(())
     }
 }
 
