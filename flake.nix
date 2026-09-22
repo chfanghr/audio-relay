@@ -31,7 +31,6 @@
             alejandra.enable = true;
             deadnix.enable = true;
             rustfmt.enable = true;
-            clippy.enable = true;
             taplo.enable = true;
           };
         };
