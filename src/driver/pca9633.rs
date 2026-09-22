@@ -71,7 +71,7 @@ impl<TDev: I2c> Driver<TDev> {
     pub fn init(&mut self) -> Result<()> {
         self.set_reg(Reg::Mode1, 0x00)?;
         self.set_reg(Reg::LedOut, 0xFF)?; // set controlable by both PWM and GRPPWM registers
-        self.set_reg(Reg::Mode1, 0x20)?; // DMBLNK
+        self.set_reg(Reg::Mode2, 0x20)?; // DMBLNK
         self.set_rgb(0, 0, 0)?;
         Ok(())
     }
