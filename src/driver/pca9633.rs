@@ -4,7 +4,7 @@ use embedded_hal::i2c::I2c;
 #[allow(unused)]
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-enum Reg {
+pub(super) enum Reg {
     Mode1 = 0x00,
     Mode2 = 0x01,
     Pwm0 = 0x02,
@@ -54,25 +54,17 @@ impl<TDev: I2c> Driver<TDev> {
         Ok(Self { addr, i2c })
     }
 
-    fn set_reg(&mut self, reg: Reg, val: u8) -> Result<()> {
+    pub(super) fn set_reg(&mut self, reg: Reg, val: u8) -> Result<()> {
         self.i2c
             .write(self.addr, &[reg as u8, val])
             .map_err(|err| anyhow!("failed to set reg {}: {:?}", reg, err))?;
         Ok(())
     }
 
-    pub fn set_rgb(&mut self, r: u8, g: u8, b: u8) -> Result<()> {
-        self.set_reg(Reg::Pwm2, r)?;
-        self.set_reg(Reg::Pwm1, g)?;
-        self.set_reg(Reg::Pwm0, b)?;
-        Ok(())
-    }
-
-    pub fn init(&mut self) -> Result<()> {
+    pub(super) fn init(&mut self) -> Result<()> {
         self.set_reg(Reg::Mode1, 0x00)?;
         self.set_reg(Reg::LedOut, 0xFF)?; // set controlable by both PWM and GRPPWM registers
         self.set_reg(Reg::Mode2, 0x20)?; // DMBLNK
-        self.set_rgb(0, 0, 0)?;
         Ok(())
     }
 }
