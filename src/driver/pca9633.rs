@@ -62,9 +62,9 @@ impl<TDev: I2c> Driver<TDev> {
     }
 
     fn set_rgb(&mut self, r: u8, g: u8, b: u8) -> Result<()> {
-        self.set_reg(Reg::SubAdr1, r)?;
-        self.set_reg(Reg::SubAdr2, g)?;
-        self.set_reg(Reg::SubAdr2, b)?;
+        self.set_reg(Reg::Pwm2, r)?;
+        self.set_reg(Reg::Pwm1, g)?;
+        self.set_reg(Reg::Pwm0, b)?;
         Ok(())
     }
 
