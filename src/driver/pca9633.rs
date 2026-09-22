@@ -49,7 +49,7 @@ pub(super) struct Driver<TDev> {
 impl<TDev: I2c> Driver<TDev> {
     pub(super) fn new(addr: u8, mut i2c: TDev) -> Result<Self> {
         // Sanity check: device presents?
-        i2c.write_read(addr, &[Reg::Mode1 as u8], &mut [0])
+        i2c.read(addr, &mut [0])
             .map_err(|err| anyhow!("PCA9633 doesn't seem to present at {:#x}: {:?}", addr, err))?;
         Ok(Self { addr, i2c })
     }
