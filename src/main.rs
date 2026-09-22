@@ -18,9 +18,11 @@ fn main() -> Result<()> {
         for r in color_channel_range.clone() {
             for g in color_channel_range.clone() {
                 for b in color_channel_range.clone() {
-                    _ = hat.set_backlight_rgb(r, g, b);
-                    _ = hat.set_backlight_brightness((r + g + b) % 255);
-                    thread::sleep(Duration::from_millis(100));
+                    for bn in color_channel_range.clone() {
+                        _ = hat.set_backlight_rgb(r, g, b);
+                        _ = hat.set_backlight_brightness(bn);
+                        thread::sleep(Duration::from_millis(100));
+                    }
                 }
             }
         }
