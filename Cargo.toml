@@ -5,6 +5,7 @@ edition = "2024"
 description = "blah"
 
 [dependencies]
+anyhow = "1.0.104"
 embedded-hal = "1.0.0"
 linux-embedded-hal = { version = "0.5.0", features = ["i2c"] }
 pipewire = "0.10.1"
