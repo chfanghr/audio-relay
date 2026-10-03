@@ -3,6 +3,7 @@ use std::{path::Path, thread, time::Duration};
 use super::{button, pca9633};
 use anyhow::{Context, Ok, Result};
 use embedded_hal::{digital::InputPin, i2c::I2c};
+use log::info;
 
 const RGB_DEV_ADDR: u8 = 0x2d;
 
@@ -16,16 +17,16 @@ pub struct Driver<TDev, Pin> {
     pub select_button: button::Driver<Pin>,
 }
 
-impl<TDev: I2c, Pin: InputPin> Driver<TDev, Pin> {
+impl<I2CBusDev: I2c, Pin: InputPin> Driver<I2CBusDev, Pin> {
     pub fn new(
-        rgb_dev: TDev,
+        i2c_bus: I2CBusDev,
         up_button: Pin,
         down_button: Pin,
         left_button: Pin,
         right_button: Pin,
         select_button: Pin,
     ) -> Result<Self> {
-        let rgb = pca9633::Driver::new(RGB_DEV_ADDR, rgb_dev)?;
+        let rgb = pca9633::Driver::new(RGB_DEV_ADDR, i2c_bus)?;
 
         Ok(Self {
             backlight: rgb,
@@ -52,36 +53,61 @@ impl<TDev: I2c, Pin: InputPin> Driver<TDev, Pin> {
 }
 
 const RPI4B_I2C1_BUS_PATH: &str = "/dev/i2c-1";
+const RPI4B_GPIO_CHIP_PATH: &str = "/dev/gpiochip0";
 
-impl Driver<linux_embedded_hal::I2cdev, linux_embedded_hal::SysfsPin> {
+impl Driver<linux_embedded_hal::I2cdev, linux_embedded_hal::CdevPin> {
     pub fn new_linux<P: AsRef<Path>>(
-        p: P,
-        up_pin: u64,
-        down_pin: u64,
-        left_pin: u64,
-        right_pin: u64,
-        select_pin: u64,
+        i2c_bus_path: P,
+        gpio_chip_path: P,
+        up_pin: u32,
+        down_pin: u32,
+        left_pin: u32,
+        right_pin: u32,
+        select_pin: u32,
     ) -> Result<Self> {
-        let rgb_dev = linux_embedded_hal::I2cdev::new(p)?;
-        let up_pin = Self::setup_pin(up_pin)?;
-        let down_pin = Self::setup_pin(down_pin)?;
-        let left_pin = Self::setup_pin(left_pin)?;
-        let right_pin = Self::setup_pin(right_pin)?;
-        let select_pin = Self::setup_pin(select_pin)?;
+        info!("hat: using i2c bus {:?}", i2c_bus_path.as_ref());
+        let i2c_bus = linux_embedded_hal::I2cdev::new(i2c_bus_path)
+            .context("failed to initialize i2c bus")?;
+        info!("hat: using gpiochip {:?}", gpio_chip_path.as_ref());
+        let mut gpio_chip =
+            gpio_cdev::Chip::new(gpio_chip_path).context("failed to initialize gpio chip")?;
+        let up_pin = Self::setup_pin("up", &mut gpio_chip, up_pin)?;
+        let down_pin = Self::setup_pin("down", &mut gpio_chip, down_pin)?;
+        let left_pin = Self::setup_pin("left", &mut gpio_chip, left_pin)?;
+        let right_pin = Self::setup_pin("right", &mut gpio_chip, right_pin)?;
+        let select_pin = Self::setup_pin("select", &mut gpio_chip, select_pin)?;
         thread::sleep(Duration::from_secs(1));
-        Self::new(rgb_dev, up_pin, down_pin, left_pin, right_pin, select_pin)
+        Self::new(i2c_bus, up_pin, down_pin, left_pin, right_pin, select_pin)
     }
 
     pub fn new_rpi_4b() -> Result<Self> {
-        Self::new_linux(RPI4B_I2C1_BUS_PATH, 17, 18, 19, 20, 16)
+        Self::new_linux(
+            RPI4B_I2C1_BUS_PATH,
+            RPI4B_GPIO_CHIP_PATH,
+            17,
+            18,
+            19,
+            20,
+            16,
+        )
     }
 
-    fn setup_pin(n: u64) -> Result<linux_embedded_hal::SysfsPin> {
-        let p = linux_embedded_hal::SysfsPin::new(n);
-        p.export().context(format!("failed to export pin {}", n))?;
-        let p = p
-            .into_input_pin()
-            .context(format!("failed to set pin {} to input mode", n))?;
-        Ok(p)
+    fn setup_pin(
+        lbl: &str,
+        chip: &mut gpio_cdev::Chip,
+        offset: u32,
+    ) -> Result<linux_embedded_hal::CdevPin> {
+        let mut inner = || {
+            let line = chip.get_line(offset)?;
+            let line_handle = line.request(
+                gpio_cdev::LineRequestFlags::INPUT,
+                0,
+                &format!("audio-relay-hat-btn-{}", lbl),
+            )?;
+            let pin = linux_embedded_hal::CdevPin::new(line_handle)?;
+            let pin = pin.into_input_pin()?;
+            Ok(pin)
+        };
+        inner().context(format!("setup_pin: offset {}, label {}", offset, lbl))
     }
 }
