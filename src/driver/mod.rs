@@ -1,2 +1,3 @@
+pub mod button;
 pub mod hat;
-mod pca9633;
+pub mod pca9633;
