@@ -40,6 +40,7 @@ dependencies = [
  "anyhow",
  "backon",
  "embedded-hal",
+ "gpio-cdev",
  "linux-embedded-hal",
  "log",
  "pipewire",
