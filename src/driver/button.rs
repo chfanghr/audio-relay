@@ -26,7 +26,7 @@ impl<P> Driver<P> {
 }
 
 impl<P: InputPin> Driver<P> {
-    pub fn block_until_low(&mut self) -> Result<Option<Duration>> {
+    pub fn block_until_release(&mut self) -> Result<Option<Duration>> {
         let begin = Instant::now();
         if self.read()? {
             loop {
