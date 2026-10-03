@@ -1,8 +1,6 @@
 use std::{path::Path, thread, time::Duration};
 
-use crate::driver::button::Button;
-
-use super::pca9633;
+use super::{button, pca9633};
 use anyhow::{Context, Ok, Result};
 use embedded_hal::{digital::InputPin, i2c::I2c};
 
@@ -11,11 +9,11 @@ const RGB_DEV_ADDR: u8 = 0x2d;
 pub struct Driver<TDev, Pin> {
     pub backlight: pca9633::Driver<TDev>,
 
-    pub up_button: Button<Pin>,
-    pub down_button: Button<Pin>,
-    pub left_button: Button<Pin>,
-    pub right_button: Button<Pin>,
-    pub select_button: Button<Pin>,
+    pub up_button: button::Driver<Pin>,
+    pub down_button: button::Driver<Pin>,
+    pub left_button: button::Driver<Pin>,
+    pub right_button: button::Driver<Pin>,
+    pub select_button: button::Driver<Pin>,
 }
 
 impl<TDev: I2c, Pin: InputPin> Driver<TDev, Pin> {
@@ -31,11 +29,11 @@ impl<TDev: I2c, Pin: InputPin> Driver<TDev, Pin> {
 
         Ok(Self {
             backlight: rgb,
-            up_button: Button::new(up_button),
-            down_button: Button::new(down_button),
-            left_button: Button::new(left_button),
-            right_button: Button::new(right_button),
-            select_button: Button::new(select_button),
+            up_button: button::Driver::new(up_button),
+            down_button: button::Driver::new(down_button),
+            left_button: button::Driver::new(left_button),
+            right_button: button::Driver::new(right_button),
+            select_button: button::Driver::new(select_button),
         })
     }
 

@@ -12,20 +12,20 @@ struct Debounce {
 }
 
 #[derive(Debug)]
-pub struct Button<P> {
+pub struct Driver<P> {
     p: P,
     d: Option<Debounce>,
 }
 
 const DEBOUNCE_THRESHOLD: Duration = Duration::from_millis(500);
 
-impl<P> Button<P> {
+impl<P> Driver<P> {
     pub fn new(p: P) -> Self {
         Self { p, d: None }
     }
 }
 
-impl<P: InputPin> Button<P> {
+impl<P: InputPin> Driver<P> {
     pub fn block_until_low(&mut self) -> Result<Option<Duration>> {
         let begin = Instant::now();
         if self.read()? {
