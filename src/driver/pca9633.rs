@@ -41,7 +41,7 @@ impl std::fmt::Display for Reg {
     }
 }
 
-pub(super) struct Driver<TDev> {
+pub struct Driver<TDev> {
     addr: u8,
     i2c: TDev,
 }

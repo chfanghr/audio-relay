@@ -4,20 +4,18 @@ use crate::driver::button::Button;
 
 use super::pca9633;
 use anyhow::{Context, Ok, Result};
-use derive_getters::Getters;
 use embedded_hal::{digital::InputPin, i2c::I2c};
 
 const RGB_DEV_ADDR: u8 = 0x2d;
 
-#[derive(Getters)]
 pub struct Driver<TDev, Pin> {
-    backlight: pca9633::Driver<TDev>,
+    pub backlight: pca9633::Driver<TDev>,
 
-    up_button: Button<Pin>,
-    down_button: Button<Pin>,
-    left_button: Button<Pin>,
-    right_button: Button<Pin>,
-    select_button: Button<Pin>,
+    pub up_button: Button<Pin>,
+    pub down_button: Button<Pin>,
+    pub left_button: Button<Pin>,
+    pub right_button: Button<Pin>,
+    pub select_button: Button<Pin>,
 }
 
 impl<TDev: I2c, Pin: InputPin> Driver<TDev, Pin> {
