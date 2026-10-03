@@ -1,11 +1,14 @@
 use std::{path::Path, thread, time::Duration};
 
+use crate::driver::aip31068;
+
 use super::{button, pca9633};
 use anyhow::{Context, Ok, Result};
 use embedded_hal::{digital::InputPin, i2c::I2c};
 use log::info;
 
 const RGB_DEV_ADDR: u8 = 0x2d;
+const LCD_DEV_ADDR: u8 = 0x3e;
 
 pub struct Driver<TDev, Pin> {
     pub backlight: pca9633::Driver<TDev>,
@@ -15,18 +18,22 @@ pub struct Driver<TDev, Pin> {
     pub left_button: button::Driver<Pin>,
     pub right_button: button::Driver<Pin>,
     pub select_button: button::Driver<Pin>,
+
+    pub lcd: aip31068::Driver<TDev>,
 }
 
 impl<I2CBusDev: I2c, Pin: InputPin> Driver<I2CBusDev, Pin> {
     pub fn new(
-        i2c_bus: I2CBusDev,
+        i2c_bus_rgb: I2CBusDev,
+        i2c_bus_lcd: I2CBusDev,
         up_button: Pin,
         down_button: Pin,
         left_button: Pin,
         right_button: Pin,
         select_button: Pin,
     ) -> Result<Self> {
-        let rgb = pca9633::Driver::new(RGB_DEV_ADDR, i2c_bus)?;
+        let rgb = pca9633::Driver::new(RGB_DEV_ADDR, i2c_bus_rgb)?;
+        let lcd = aip31068::Driver::new(LCD_DEV_ADDR, i2c_bus_lcd)?;
 
         Ok(Self {
             backlight: rgb,
@@ -35,11 +42,13 @@ impl<I2CBusDev: I2c, Pin: InputPin> Driver<I2CBusDev, Pin> {
             left_button: button::Driver::new(left_button),
             right_button: button::Driver::new(right_button),
             select_button: button::Driver::new(select_button),
+            lcd,
         })
     }
 
     pub fn init(&mut self) -> Result<()> {
         self.backlight.init()?;
+        self.lcd.init()?;
         self.set_backlight_rgb(0, 0, 0)?;
         Ok(())
     }
@@ -66,7 +75,9 @@ impl Driver<linux_embedded_hal::I2cdev, linux_embedded_hal::CdevPin> {
         select_pin: u32,
     ) -> Result<Self> {
         info!("hat: using i2c bus {:?}", i2c_bus_path.as_ref());
-        let i2c_bus = linux_embedded_hal::I2cdev::new(i2c_bus_path)
+        let i2c_bus_rgb = linux_embedded_hal::I2cdev::new(i2c_bus_path.as_ref())
+            .context("failed to initialize i2c bus")?;
+        let i2c_bus_lcd = linux_embedded_hal::I2cdev::new(i2c_bus_path.as_ref())
             .context("failed to initialize i2c bus")?;
         info!("hat: using gpiochip {:?}", gpio_chip_path.as_ref());
         let mut gpio_chip =
@@ -77,7 +88,15 @@ impl Driver<linux_embedded_hal::I2cdev, linux_embedded_hal::CdevPin> {
         let right_pin = Self::setup_pin("right", &mut gpio_chip, right_pin)?;
         let select_pin = Self::setup_pin("select", &mut gpio_chip, select_pin)?;
         thread::sleep(Duration::from_secs(1));
-        Self::new(i2c_bus, up_pin, down_pin, left_pin, right_pin, select_pin)
+        Self::new(
+            i2c_bus_rgb,
+            i2c_bus_lcd,
+            up_pin,
+            down_pin,
+            left_pin,
+            right_pin,
+            select_pin,
+        )
     }
 
     pub fn new_rpi_4b() -> Result<Self> {
