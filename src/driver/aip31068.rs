@@ -187,6 +187,14 @@ impl<TDev: I2c> Driver<TDev> {
             cursor_blink: OnOff::On,
         })?;
         self.send_standalone_command(Command::SetDdramAddress(0x00))?;
+        self.i2c
+            .write(
+                self.addr,
+                &[
+                    0x40, b'H', b'e', b'l', b'l', b'o', b' ', b'W', b'o', b'r', b'l', b'd',
+                ],
+            )
+            .map_err(|err| anyhow!("failed to write: {:?}", err))?;
         Ok(())
     }
 }
