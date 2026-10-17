@@ -2,7 +2,7 @@ use std::{path::Path, thread, time::Duration};
 
 use crate::driver::aip31068;
 
-use super::{button, pca9633};
+use super::{button, rgb};
 use anyhow::{Context, Ok, Result};
 use embedded_hal::{digital::InputPin, i2c::I2c};
 use log::info;
@@ -11,7 +11,7 @@ const RGB_DEV_ADDR: u8 = 0x2d;
 const LCD_DEV_ADDR: u8 = 0x3e;
 
 pub struct Driver<TDev, Pin> {
-    pub backlight: pca9633::Driver<TDev>,
+    pub backlight: rgb::Driver<TDev>,
 
     pub up_button: button::Driver<Pin>,
     pub down_button: button::Driver<Pin>,
@@ -32,7 +32,7 @@ impl<I2CBusDev: I2c, Pin: InputPin> Driver<I2CBusDev, Pin> {
         right_button: Pin,
         select_button: Pin,
     ) -> Result<Self> {
-        let rgb = pca9633::Driver::new(RGB_DEV_ADDR, i2c_bus_rgb)?;
+        let rgb = rgb::Driver::new(RGB_DEV_ADDR, i2c_bus_rgb)?;
         let lcd = aip31068::Driver::new(LCD_DEV_ADDR, i2c_bus_lcd)?;
 
         Ok(Self {
@@ -54,10 +54,7 @@ impl<I2CBusDev: I2c, Pin: InputPin> Driver<I2CBusDev, Pin> {
     }
 
     pub fn set_backlight_rgb(&mut self, r: u8, g: u8, b: u8) -> Result<()> {
-        self.backlight.set_reg(pca9633::Reg::Pwm2, r)?;
-        self.backlight.set_reg(pca9633::Reg::Pwm1, g)?;
-        self.backlight.set_reg(pca9633::Reg::Pwm0, b)?;
-        Ok(())
+        self.backlight.set_rgb(r, g, b)
     }
 }
 
