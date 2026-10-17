@@ -1,6 +1,6 @@
-use std::{thread, time::Duration};
+use std::{iter, thread, time::Duration};
 
-use anyhow::{Ok, Result, anyhow};
+use anyhow::{Context, Ok, Result, anyhow, ensure};
 use embedded_hal::i2c::I2c;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -156,45 +156,87 @@ impl<TDev: I2c> Driver<TDev> {
         Ok(Self { addr, i2c })
     }
 
-    fn send_standalone_command(&mut self, cmd: Command) -> Result<()> {
-        self.i2c
-            .write(self.addr, &[0x00, cmd.to_byte()])
-            .map_err(|err| anyhow!("failed to send command {:?}: {:?}", cmd, err))?;
+    fn send_commands(&mut self, cmds: &[Command]) -> Result<()> {
+        let bytes_to_send = iter::once(0x00u8)
+            .chain(cmds.iter().map(|c| c.to_byte()))
+            .collect::<Vec<u8>>();
+        self.i2c.write(self.addr, &bytes_to_send).map_err(|err| {
+            anyhow!("failed to send commands: {:?}", err)
+                .context(anyhow!("bytes_to_send: {:?}", bytes_to_send))
+                .context(anyhow!("cmds: {:?}", cmds))
+        })?;
         thread::sleep(Duration::from_millis(5));
         Ok(())
     }
 
+    /// - Set two lines mode
+    /// - 5x8 font
+    /// - Clear display
+    /// - Right to left without display shift
+    /// - Enable cursor, blinking
+    /// - Set cursor to row 0, column 0
     pub fn init(&mut self) -> Result<()> {
-        assert_eq!(ROWS, 2); // we set two lines below
-        self.send_standalone_command(Command::FunctionSet {
-            lines: Lines::TwoLines,
-            font: Font::FiveByEight,
-        })?;
-        // Turn off display
-        self.send_standalone_command(Command::DisplayControl {
-            display: OnOff::Off,
-            cursor: OnOff::Off,
-            cursor_blink: OnOff::Off,
-        })?;
-        self.send_standalone_command(Command::ClearDisplay)?;
-        self.send_standalone_command(Command::EntryModeSet {
-            direction: Direction::Right,
-            display_shift: DisplayShift::Disabled,
-        })?;
-        self.send_standalone_command(Command::DisplayControl {
-            display: OnOff::On,
-            cursor: OnOff::On,
-            cursor_blink: OnOff::On,
-        })?;
-        self.send_standalone_command(Command::SetDdramAddress(0x00))?;
+        let commands = [
+            Command::FunctionSet {
+                lines: Lines::TwoLines,
+                font: Font::FiveByEight,
+            },
+            Command::DisplayControl {
+                display: OnOff::Off,
+                cursor: OnOff::Off,
+                cursor_blink: OnOff::Off,
+            },
+            Command::ClearDisplay,
+            Command::EntryModeSet {
+                direction: Direction::Right,
+                display_shift: DisplayShift::Disabled,
+            },
+            Command::DisplayControl {
+                display: OnOff::On,
+                cursor: OnOff::On,
+                cursor_blink: OnOff::On,
+            },
+            Command::SetDdramAddress(0x00),
+        ];
+
+        for command in commands {
+            self.send_commands(&[command])
+                .context("unable to initialize display")?;
+        }
+
+        Ok(())
+    }
+
+    pub fn clear_display(&mut self) -> Result<()> {
+        self.send_commands(&[Command::ClearDisplay])
+    }
+
+    pub fn move_cursor(&mut self, row: u8, col: u8) -> Result<()> {
+        ensure!(row < ROWS, "{} exceeds maximum rows {}", row, ROWS);
+        ensure!(col < COLS, "{} exceeds maximum cols {}", col, COLS);
+
+        let row_to_offset: [u8; ROWS as usize] = [0x00, 0x40];
+        let addr = row_to_offset[row as usize] | col;
+
+        self.send_commands(&[Command::SetDdramAddress(addr)])
+    }
+
+    pub fn write_ascii_text(&mut self, s: &str) -> Result<()> {
+        ensure!(s.is_ascii(), "{} is not a ascii string", s);
+        ensure!(
+            s.len() < COLS as usize,
+            "string len {} exceeds maximum cols {}",
+            s.len(),
+            COLS
+        );
+        let bytes_to_send = iter::once(0x40u8)
+            .chain(s.as_bytes().iter().copied())
+            .collect::<Vec<u8>>();
         self.i2c
-            .write(
-                self.addr,
-                &[
-                    0x40, b'H', b'e', b'l', b'l', b'o', b' ', b'W', b'o', b'r', b'l', b'd',
-                ],
-            )
-            .map_err(|err| anyhow!("failed to write: {:?}", err))?;
+            .write(self.addr, &bytes_to_send)
+            .map_err(|err| anyhow!("unable to write ascii text: {:?}", err))
+            .context(anyhow!("bytes_to_send: {:?}", bytes_to_send))?;
+        thread::sleep(Duration::from_millis(5));
         Ok(())
     }
 }

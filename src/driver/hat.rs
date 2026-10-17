@@ -1,6 +1,6 @@
 use std::{path::Path, thread, time::Duration};
 
-use crate::driver::aip31068;
+use crate::driver::aip31068_16x2;
 
 use super::{button, rgb};
 use anyhow::{Context, Ok, Result};
@@ -19,7 +19,7 @@ pub struct Driver<TDev, Pin> {
     pub right_button: button::Driver<Pin>,
     pub select_button: button::Driver<Pin>,
 
-    pub lcd: aip31068::Driver<TDev>,
+    pub lcd: aip31068_16x2::Driver<TDev>,
 }
 
 impl<I2CBusDev: I2c, Pin: InputPin> Driver<I2CBusDev, Pin> {
@@ -33,7 +33,7 @@ impl<I2CBusDev: I2c, Pin: InputPin> Driver<I2CBusDev, Pin> {
         select_button: Pin,
     ) -> Result<Self> {
         let rgb = rgb::Driver::new(RGB_DEV_ADDR, i2c_bus_rgb)?;
-        let lcd = aip31068::Driver::new(LCD_DEV_ADDR, i2c_bus_lcd)?;
+        let lcd = aip31068_16x2::Driver::new(LCD_DEV_ADDR, i2c_bus_lcd)?;
 
         Ok(Self {
             backlight: rgb,
@@ -49,12 +49,24 @@ impl<I2CBusDev: I2c, Pin: InputPin> Driver<I2CBusDev, Pin> {
     pub fn init(&mut self) -> Result<()> {
         self.backlight.init()?;
         self.lcd.init()?;
-        self.set_backlight_rgb(0, 0, 0)?;
-        Ok(())
-    }
 
-    pub fn set_backlight_rgb(&mut self, r: u8, g: u8, b: u8) -> Result<()> {
-        self.backlight.set_rgb(r, g, b)
+        self.lcd.move_cursor(0, 0)?;
+        self.lcd.write_ascii_text("Hello World")?;
+        self.lcd.move_cursor(1, 0)?;
+        self.lcd.write_ascii_text("driver: up")?;
+
+        self.backlight.set_rgb(255, 0, 0)?;
+        thread::sleep(Duration::from_secs(1));
+        self.backlight.set_rgb(0, 255, 0)?;
+        thread::sleep(Duration::from_secs(1));
+        self.backlight.set_rgb(0, 0, 255)?;
+        thread::sleep(Duration::from_secs(1));
+
+        self.lcd.clear_display()?;
+        self.lcd.move_cursor(0, 0)?;
+        self.backlight.set_rgb(255, 255, 255)?;
+
+        Ok(())
     }
 }
 
