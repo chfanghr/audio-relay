@@ -22,7 +22,7 @@ fn run_pipewire_loop(state: Arc<RwLock<AudioGraphState>>, quit_rx: Receiver<()>)
     let main_loop_weak = main_loop.downgrade();
     let _quit = quit_rx.attach(main_loop.loop_(), move |_| {
         if let Some(main_loop) = main_loop_weak.upgrade() {
-            println!("stopping the pipewire loop");
+            info!(target: "pipewire", "stopping the pipewire loop");
             main_loop.quit();
         }
     });
