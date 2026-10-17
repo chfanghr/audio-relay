@@ -1,15 +1,18 @@
 mod audio;
 mod driver;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
-use crate::driver::hat;
+use crate::{audio::demo_main, driver::hat};
 
 fn main() -> Result<()> {
     env_logger::init();
 
-    let mut hat = hat::Driver::new_rpi_4b()?;
-    hat.init()?;
+    // let mut hat = hat::Driver::new_rpi_4b()?;
+    // hat.init()?;
+
+    // Ok(())
+    demo_main()?;
 
     Ok(())
 }
