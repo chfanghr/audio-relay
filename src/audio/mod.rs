@@ -146,7 +146,7 @@ pub fn demo_main() -> Result<()> {
     let state_for_pipewire_loop = state.clone();
 
     ctrlc::set_handler(move || {
-        info!("ctrl+c received, quiting");
+        info!("ctrl+c received, quitting");
         _ = quit_tx.send(());
     })
     .context("error setting up signal handler")?;
