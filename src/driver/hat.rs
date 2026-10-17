@@ -5,7 +5,7 @@ use crate::driver::aip31068_16x2;
 use super::{button, rgb};
 use anyhow::{Context, Ok, Result};
 use embedded_hal::{digital::InputPin, i2c::I2c};
-use log::info;
+use log::{debug, info};
 
 const RGB_DEV_ADDR: u8 = 0x2d;
 const LCD_DEV_ADDR: u8 = 0x3e;
@@ -66,6 +66,8 @@ impl<I2CBusDev: I2c, Pin: InputPin> Driver<I2CBusDev, Pin> {
         self.lcd.move_cursor(0, 0)?;
         self.backlight.set_rgb(255, 255, 255)?;
 
+        info!(target: "hat", "initialized");
+
         Ok(())
     }
 }
@@ -83,12 +85,12 @@ impl Driver<linux_embedded_hal::I2cdev, linux_embedded_hal::CdevPin> {
         right_pin: u32,
         select_pin: u32,
     ) -> Result<Self> {
-        info!("hat: using i2c bus {:?}", i2c_bus_path.as_ref());
+        debug!(target: "hat", "using i2c bus {:?}", i2c_bus_path.as_ref());
         let i2c_bus_rgb = linux_embedded_hal::I2cdev::new(i2c_bus_path.as_ref())
             .context("failed to initialize i2c bus")?;
         let i2c_bus_lcd = linux_embedded_hal::I2cdev::new(i2c_bus_path.as_ref())
             .context("failed to initialize i2c bus")?;
-        info!("hat: using gpiochip {:?}", gpio_chip_path.as_ref());
+        debug!(target: "hat", "using gpiochip {:?}", gpio_chip_path.as_ref());
         let mut gpio_chip =
             gpio_cdev::Chip::new(gpio_chip_path).context("failed to initialize gpio chip")?;
         let up_pin = Self::setup_pin("up", &mut gpio_chip, up_pin)?;
@@ -96,7 +98,7 @@ impl Driver<linux_embedded_hal::I2cdev, linux_embedded_hal::CdevPin> {
         let left_pin = Self::setup_pin("left", &mut gpio_chip, left_pin)?;
         let right_pin = Self::setup_pin("right", &mut gpio_chip, right_pin)?;
         let select_pin = Self::setup_pin("select", &mut gpio_chip, select_pin)?;
-        thread::sleep(Duration::from_secs(1));
+        info!(target: "hat", "driver created");
         Self::new(
             i2c_bus_rgb,
             i2c_bus_lcd,
@@ -126,6 +128,7 @@ impl Driver<linux_embedded_hal::I2cdev, linux_embedded_hal::CdevPin> {
         offset: u32,
     ) -> Result<linux_embedded_hal::CdevPin> {
         let mut inner = || {
+            debug!(target: "hat", "initializing pin labeled {} at offset {}", lbl, offset);
             let line = chip.get_line(offset)?;
             let line_handle = line.request(
                 gpio_cdev::LineRequestFlags::INPUT,
