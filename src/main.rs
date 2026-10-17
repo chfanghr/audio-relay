@@ -1,3 +1,4 @@
+mod audio;
 mod driver;
 
 use anyhow::Result;
