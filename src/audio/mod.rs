@@ -6,17 +6,18 @@ use anyhow::{Context, Result, anyhow};
 use log::{debug, info};
 use pipewire::{registry::GlobalObject, spa::utils::dict::DictRef, types::ObjectType};
 
-pub enum PipeWireGraphUpdate {
+// from pipwire loop
+enum PipeWireGraphEvent {
     AddPort(PortDesc),
     RemovePort(ObjectId),
     InitialSyncCompleted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Copy)]
-pub struct ObjectId(u32);
+struct ObjectId(u32);
 
 #[derive(Debug, Clone)]
-pub enum PortDirection {
+enum PortDirection {
     In,
     Out,
 }
@@ -32,13 +33,22 @@ impl PortDirection {
 }
 
 #[derive(Debug, Clone)]
-pub struct PortDesc {
+struct PortDesc {
     id: ObjectId,
     direction: PortDirection,
     channel: String,
     object_path: String,
     alias: String,
     node_id: ObjectId,
+}
+
+#[derive(Debug, Clone)]
+struct LinkDesc {
+    id: ObjectId,
+    input_node_id: ObjectId,
+    input_port_id: ObjectId,
+    output_node_id: ObjectId,
+    output_port_id: ObjectId,
 }
 
 #[derive(Debug, Clone)]
@@ -56,8 +66,21 @@ impl PipewireGraphState {
     }
 }
 
+// to pipwire loop
+enum PipewireLinkEvent {
+    CreateLink {
+        input_node_id: ObjectId,
+        input_port_id: ObjectId,
+        output_node_id: ObjectId,
+        output_port_id: ObjectId,
+    },
+    DestroyLink {
+        link_id: ObjectId,
+    },
+}
+
 pub fn demo_main() -> Result<()> {
-    let (update_receiver, loop_thread_handle, stop_loop_thread) = pipewire_loop::run()?;
+    let (update_receiver, _link_sender, join_loop, stop_loop_thread) = pipewire_loop::run()?;
 
     ctrlc::set_handler(move || {
         info!(target: "signal", "interrupted, quitting");
@@ -70,13 +93,13 @@ pub fn demo_main() -> Result<()> {
             .iter()
             .fold(PipewireGraphState::new(), |mut acc, update| {
                 match update {
-                    PipeWireGraphUpdate::AddPort(port_desc) => {
+                    PipeWireGraphEvent::AddPort(port_desc) => {
                         acc.ports.insert(port_desc.id, port_desc);
                     }
-                    PipeWireGraphUpdate::RemovePort(object_id) => {
+                    PipeWireGraphEvent::RemovePort(object_id) => {
                         acc.ports.remove(&object_id);
                     }
-                    PipeWireGraphUpdate::InitialSyncCompleted => {
+                    PipeWireGraphEvent::InitialSyncCompleted => {
                         acc.initial_sync_done = true;
                     }
                 };
@@ -85,9 +108,7 @@ pub fn demo_main() -> Result<()> {
             });
     });
 
-    loop_thread_handle
-        .join()
-        .map_err(|err| anyhow!("failure upon joining the pipewire loop thread: {:?}", err))?;
+    join_loop();
 
     Ok(())
 }
