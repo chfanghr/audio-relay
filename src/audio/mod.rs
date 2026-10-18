@@ -55,7 +55,7 @@ fn run_pipewire_loop(state: Arc<RwLock<AudioGraphState>>, quit_rx: Receiver<()>)
                 .write()
                 .unwrap_or_else(PoisonError::into_inner)
                 .ports
-                .remove(&id);
+                .remove(&ObjectId(id));
         })
         .register();
 
@@ -79,6 +79,9 @@ fn run_pipewire_loop(state: Arc<RwLock<AudioGraphState>>, quit_rx: Receiver<()>)
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Copy)]
+struct ObjectId(u32);
+
 #[derive(Debug, Clone)]
 enum PortDirection {
     In,
@@ -97,16 +100,17 @@ impl PortDirection {
 
 #[derive(Debug, Clone)]
 struct PortDesc {
-    id: u32,
+    id: ObjectId,
     direction: PortDirection,
     channel: String,
     object_path: String,
     alias: String,
+    node_id: ObjectId,
 }
 
 impl PortDesc {
     fn from_global_object(global: &GlobalObject<&DictRef>) -> Option<Self> {
-        let id = global.id;
+        let id = ObjectId(global.id);
         (global.type_ == ObjectType::Port).then_some(())?;
         let props = global.props?;
         let direction = props
@@ -115,12 +119,14 @@ impl PortDesc {
         let channel = props.get("audio.channel")?.to_owned();
         let object_path = props.get("object.path")?.to_owned();
         let alias = props.get("port.alias")?.to_owned();
+        let node_id = ObjectId(props.get("node.id")?.parse().ok()?);
         Some(Self {
             id,
             direction,
             channel,
             object_path,
             alias,
+            node_id,
         })
     }
 }
@@ -128,7 +134,7 @@ impl PortDesc {
 #[derive(Debug, Clone)]
 struct AudioGraphState {
     initial_sync_done: bool,
-    ports: BTreeMap<u32, PortDesc>,
+    ports: BTreeMap<ObjectId, PortDesc>,
 }
 
 impl AudioGraphState {
