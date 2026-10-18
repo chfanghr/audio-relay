@@ -7,7 +7,7 @@ use log::{debug, info};
 use pipewire::{registry::GlobalObject, spa::utils::dict::DictRef, types::ObjectType};
 
 // from pipwire loop
-enum PipeWireGraphEvent {
+enum GraphEvent {
     AddPort(PortDesc),
     RemovePort(ObjectId),
     InitialSyncCompleted,
@@ -52,12 +52,12 @@ struct LinkDesc {
 }
 
 #[derive(Debug, Clone)]
-struct PipewireGraphState {
+struct GraphState {
     initial_sync_done: bool,
     ports: BTreeMap<ObjectId, PortDesc>,
 }
 
-impl PipewireGraphState {
+impl GraphState {
     fn new() -> Self {
         Self {
             initial_sync_done: false,
@@ -67,16 +67,23 @@ impl PipewireGraphState {
 }
 
 // to pipwire loop
-enum PipewireLinkEvent {
-    CreateLink {
-        input_node_id: ObjectId,
-        input_port_id: ObjectId,
-        output_node_id: ObjectId,
-        output_port_id: ObjectId,
-    },
-    DestroyLink {
-        link_id: ObjectId,
-    },
+#[derive(Debug, Clone)]
+struct CreateLink {
+    input_node_id: ObjectId,
+    input_port_id: ObjectId,
+    output_node_id: ObjectId,
+    output_port_id: ObjectId,
+}
+
+#[derive(Debug, Clone)]
+struct DestroyLink {
+    link_id: ObjectId,
+}
+
+#[derive(Debug, Clone)]
+enum LinkEvent {
+    CreateLink(CreateLink),
+    DestroyLink(DestroyLink),
 }
 
 pub fn demo_main() -> Result<()> {
@@ -91,15 +98,15 @@ pub fn demo_main() -> Result<()> {
     _ = thread::spawn(move || {
         _ = update_receiver
             .iter()
-            .fold(PipewireGraphState::new(), |mut acc, update| {
+            .fold(GraphState::new(), |mut acc, update| {
                 match update {
-                    PipeWireGraphEvent::AddPort(port_desc) => {
+                    GraphEvent::AddPort(port_desc) => {
                         acc.ports.insert(port_desc.id, port_desc);
                     }
-                    PipeWireGraphEvent::RemovePort(object_id) => {
+                    GraphEvent::RemovePort(object_id) => {
                         acc.ports.remove(&object_id);
                     }
-                    PipeWireGraphEvent::InitialSyncCompleted => {
+                    GraphEvent::InitialSyncCompleted => {
                         acc.initial_sync_done = true;
                     }
                 };
