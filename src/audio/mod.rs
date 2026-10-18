@@ -146,7 +146,7 @@ pub fn demo_main() -> Result<()> {
     let (update_sender, update_receiver) = mpsc::channel();
 
     ctrlc::set_handler(move || {
-        info!(target: "signal", "interrupted, quiting");
+        info!(target: "signal", "interrupted, quitting");
         _ = quit_tx.send(());
     })
     .context("error setting up signal handler")?;
