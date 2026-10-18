@@ -28,7 +28,11 @@ impl PortDesc {
     }
 }
 
-pub fn run() -> Result<(mpsc::Receiver<Update>, JoinHandle<()>, impl Fn() -> ())> {
+pub fn run() -> Result<(
+    mpsc::Receiver<PipeWireGraphUpdate>,
+    JoinHandle<()>,
+    impl Fn() -> (),
+)> {
     let (quit_tx, quit_rx) = pipewire::channel::channel::<()>();
     let (update_sender, update_receiver) = mpsc::channel();
 
@@ -40,7 +44,7 @@ pub fn run() -> Result<(mpsc::Receiver<Update>, JoinHandle<()>, impl Fn() -> ())
 }
 
 fn start(
-    update_sender: mpsc::Sender<Update>,
+    update_sender: mpsc::Sender<PipeWireGraphUpdate>,
     quit_rx: pipewire::channel::Receiver<()>,
 ) -> Result<()> {
     let main_loop = pipewire::main_loop::MainLoopRc::new(None)?;
@@ -67,7 +71,7 @@ fn start(
             if let Some(port_desc) = PortDesc::from_global_object(global) {
                 info!(target: "pipewire", "register port: {:?}", port_desc);
                 update_sender_for_global_handler
-                    .send(Update::AddPort(port_desc))
+                    .send(PipeWireGraphUpdate::AddPort(port_desc))
                     .unwrap();
             } else {
                 info!(target: "pipewire", "object with id {} is not a port", global.id);
@@ -76,7 +80,7 @@ fn start(
         .global_remove(move |id| {
             info!(target: "pipewire", "remove global object with id {}", id);
             update_sender_for_global_remove_handler
-                .send(Update::RemovePort(ObjectId(id)))
+                .send(PipeWireGraphUpdate::RemovePort(ObjectId(id)))
                 .unwrap();
         })
         .register();
@@ -89,7 +93,7 @@ fn start(
             if initial_sync_seq == seq {
                 info!(target: "pipewire", "initial sync done");
                 update_sender_for_done_handler
-                    .send(Update::InitialSyncCompleted)
+                    .send(PipeWireGraphUpdate::InitialSyncCompleted)
                     .unwrap();
             };
         })

@@ -6,7 +6,7 @@ use anyhow::{Context, Result, anyhow};
 use log::{debug, info};
 use pipewire::{registry::GlobalObject, spa::utils::dict::DictRef, types::ObjectType};
 
-pub enum Update {
+pub enum PipeWireGraphUpdate {
     AddPort(PortDesc),
     RemovePort(ObjectId),
     InitialSyncCompleted,
@@ -42,12 +42,12 @@ pub struct PortDesc {
 }
 
 #[derive(Debug, Clone)]
-struct AudioGraphState {
+struct PipewireGraphState {
     initial_sync_done: bool,
     ports: BTreeMap<ObjectId, PortDesc>,
 }
 
-impl AudioGraphState {
+impl PipewireGraphState {
     fn new() -> Self {
         Self {
             initial_sync_done: false,
@@ -68,15 +68,15 @@ pub fn demo_main() -> Result<()> {
     _ = thread::spawn(move || {
         _ = update_receiver
             .iter()
-            .fold(AudioGraphState::new(), |mut acc, update| {
+            .fold(PipewireGraphState::new(), |mut acc, update| {
                 match update {
-                    Update::AddPort(port_desc) => {
+                    PipeWireGraphUpdate::AddPort(port_desc) => {
                         acc.ports.insert(port_desc.id, port_desc);
                     }
-                    Update::RemovePort(object_id) => {
+                    PipeWireGraphUpdate::RemovePort(object_id) => {
                         acc.ports.remove(&object_id);
                     }
-                    Update::InitialSyncCompleted => {
+                    PipeWireGraphUpdate::InitialSyncCompleted => {
                         acc.initial_sync_done = true;
                     }
                 };
