@@ -1,22 +1,22 @@
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, PoisonError, RwLock},
-    thread,
-    time::Duration,
-};
+use std::{collections::BTreeMap, sync::mpsc, thread};
 
 use anyhow::{Context, Result, anyhow};
 use log::{debug, info};
 use pipewire::{
-    channel::{Receiver, channel},
-    context::ContextRc,
-    main_loop::MainLoopRc,
-    registry::GlobalObject,
-    spa::utils::dict::DictRef,
+    context::ContextRc, main_loop::MainLoopRc, registry::GlobalObject, spa::utils::dict::DictRef,
     types::ObjectType,
 };
 
-fn run_pipewire_loop(state: Arc<RwLock<AudioGraphState>>, quit_rx: Receiver<()>) -> Result<()> {
+enum Update {
+    AddPort(PortDesc),
+    RemovePort(ObjectId),
+    InitialSyncCompleted,
+}
+
+fn run_pipewire_loop(
+    update_sender: mpsc::Sender<Update>,
+    quit_rx: pipewire::channel::Receiver<()>,
+) -> Result<()> {
     let main_loop = MainLoopRc::new(None)?;
 
     let main_loop_weak = main_loop.downgrade();
@@ -31,45 +31,40 @@ fn run_pipewire_loop(state: Arc<RwLock<AudioGraphState>>, quit_rx: Receiver<()>)
     let core = context.connect_rc(None)?;
     let registry = core.get_registry_rc()?;
 
-    let state_for_global_handler = state.clone();
-    let state_for_global_remove_handler = state.clone();
+    let update_sender_for_global_handler = update_sender.clone();
+    let update_sender_for_global_remove_handler = update_sender.clone();
 
     let _listener = registry
         .add_listener_local()
         .global(move |global| {
             debug!(target: "pipewire","new global object with id {} : {:?}", global.id, global);
             if let Some(port_desc) = PortDesc::from_global_object(global) {
-                info!(target: "pipewire", "port registered: {:?}", port_desc);
-                state_for_global_handler
-                    .write()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .ports
-                    .insert(port_desc.id, port_desc);
+                info!(target: "pipewire", "register port: {:?}", port_desc);
+                update_sender_for_global_handler
+                    .send(Update::AddPort(port_desc))
+                    .unwrap();
             } else {
                 info!(target: "pipewire", "object with id {} is not a port", global.id);
             }
         })
         .global_remove(move |id| {
-            info!(target: "pipewire", "global object with id {} removed", id);
-            state_for_global_remove_handler
-                .write()
-                .unwrap_or_else(PoisonError::into_inner)
-                .ports
-                .remove(&ObjectId(id));
+            info!(target: "pipewire", "remove global object with id {}", id);
+            update_sender_for_global_remove_handler
+                .send(Update::RemovePort(ObjectId(id)))
+                .unwrap();
         })
         .register();
 
     let initial_sync_seq = core.sync(0)?;
-    let state_for_done_handler = state.clone();
+    let update_sender_for_done_handler = update_sender.clone();
     let _core_listener = core
         .add_listener_local()
         .done(move |_id, seq| {
             if initial_sync_seq == seq {
                 info!(target: "pipewire", "initial sync done");
-                state_for_done_handler
-                    .write()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .initial_sync_done = true;
+                update_sender_for_done_handler
+                    .send(Update::InitialSyncCompleted)
+                    .unwrap();
             };
         })
         .register();
@@ -147,26 +142,36 @@ impl AudioGraphState {
 }
 
 pub fn demo_main() -> Result<()> {
-    let (quit_tx, quit_rx) = channel::<()>();
-    let state = Arc::new(RwLock::new(AudioGraphState::new()));
-    let state_for_pipewire_loop = state.clone();
+    let (quit_tx, quit_rx) = pipewire::channel::channel::<()>();
+    let (update_sender, update_receiver) = mpsc::channel();
 
     ctrlc::set_handler(move || {
-        info!("ctrl+c received, quiting");
+        info!(target: "signal", "interrupted, quiting");
         _ = quit_tx.send(());
     })
     .context("error setting up signal handler")?;
 
     let pipewire_loop_thread_handle =
-        thread::spawn(move || run_pipewire_loop(state_for_pipewire_loop, quit_rx).unwrap());
+        thread::spawn(move || run_pipewire_loop(update_sender, quit_rx).unwrap());
 
     let _monitoring_thread_handle = thread::spawn(move || {
-        loop {
-            thread::sleep(Duration::from_secs(5));
-
-            let state = state.read().unwrap_or_else(PoisonError::into_inner);
-            debug!(target: "monitoring", "current state: {:?}", state)
-        }
+        _ = update_receiver
+            .iter()
+            .fold(AudioGraphState::new(), |mut acc, update| {
+                match update {
+                    Update::AddPort(port_desc) => {
+                        acc.ports.insert(port_desc.id, port_desc);
+                    }
+                    Update::RemovePort(object_id) => {
+                        acc.ports.remove(&object_id);
+                    }
+                    Update::InitialSyncCompleted => {
+                        acc.initial_sync_done = true;
+                    }
+                };
+                debug!(target: "monitoring", "current state: {:?}", acc);
+                acc
+            });
     });
 
     pipewire_loop_thread_handle
