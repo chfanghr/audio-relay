@@ -4,7 +4,6 @@ use std::{collections::BTreeMap, thread};
 
 use anyhow::{Context, Result, anyhow};
 use log::{debug, info};
-use pipewire::{registry::GlobalObject, spa::utils::dict::DictRef, types::ObjectType};
 
 // from pipwire loop
 enum GraphEvent {
